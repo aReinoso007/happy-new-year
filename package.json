@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "deploy": "npm run build && gh-pages -d dist"
   },
-  "homepage": "https://YOUR_USERNAME.github.io/happy-new-year",
+  "homepage": "https://aReinoso007.github.io/happy-new-year",
   "dependencies": {
     "gif.js": "^0.2.0",
     "html2canvas": "^1.4.1",
