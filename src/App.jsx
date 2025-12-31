@@ -1,7 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import html2canvas from 'html2canvas'
-import GIF from 'gif.js'
 import './App.css'
 
 // Messages in both languages
@@ -41,13 +39,22 @@ function App() {
   const [confetti, setConfetti] = useState([])
   const [fireworks, setFireworks] = useState([])
   const [showSwipePrompt, setShowSwipePrompt] = useState(true)
+  const [toast, setToast] = useState(null)
   const shareCardRef = useRef(null)
   const carouselRef = useRef(null)
   const isResettingRef = useRef(false)
 
+  // Toast notification function
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type, id: Date.now() })
+    setTimeout(() => {
+      setToast(null)
+    }, 3000)
+  }
+
   // Function to update meta tags for social media previews
   // Note: For dynamic preview images like Spotify, you'll need to:
-  // 1. Generate image using html2canvas
+  // 1. Generate image using a canvas library
   // 2. Upload to a hosting service (Cloudinary, ImgBB, etc.)
   // 3. Use the hosted URL in og:image meta tag
   const updateMetaTags = useCallback(async (wishName, wishLang, wishMessage) => {
@@ -177,7 +184,8 @@ function App() {
           color: colors[Math.floor(Math.random() * colors.length)],
           size: Math.random() * 10 + 5,
           speed: Math.random() * 3 + 2,
-          rotation: Math.random() * 360
+          rotation: Math.random() * 360,
+          animationDelay: Math.random() * 2
         })
       }
       setConfetti(newConfetti)
@@ -271,155 +279,9 @@ function App() {
     // Use hash-based URL for HashRouter compatibility
     const url = `${window.location.origin}${window.location.pathname}#/?name=${encodeURIComponent(name)}&lang=${language}&message=${selectedMessage}`
     navigator.clipboard.writeText(url)
-    alert(language === 'en' ? 'Link copied to clipboard!' : '¡Enlace copiado al portapapeles!')
+    showToast(language === 'en' ? 'Link copied to clipboard!' : '¡Enlace copiado al portapapeles!', 'success')
   }
 
-  const downloadImage = async () => {
-    if (!shareCardRef.current) {
-      alert(language === 'en' ? 'Card not ready. Please wait a moment.' : 'La tarjeta no está lista. Por favor espera un momento.')
-      return
-    }
-    
-    try {
-      // Wait a bit to ensure the element is fully rendered
-      await new Promise(resolve => setTimeout(resolve, 100))
-      
-      const canvas = await html2canvas(shareCardRef.current, {
-        backgroundColor: '#1e1b4b', // Solid background color (indigo-900)
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        allowTaint: true,
-        removeContainer: true,
-        windowWidth: shareCardRef.current.offsetWidth,
-        windowHeight: shareCardRef.current.offsetHeight,
-        width: shareCardRef.current.offsetWidth,
-        height: shareCardRef.current.offsetHeight
-      })
-      
-      const link = document.createElement('a')
-      link.download = `happy-new-year-${name.replace(/\s+/g, '-')}-${Date.now()}.png`
-      link.href = canvas.toDataURL('image/png', 1.0)
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-    } catch (error) {
-      console.error('Error generating image:', error)
-      alert(language === 'en' 
-        ? `Error generating image: ${error.message}. Please try again.` 
-        : `Error al generar la imagen: ${error.message}. Por favor intenta de nuevo.`)
-    }
-  }
-
-  const downloadGIF = async () => {
-    if (!shareCardRef.current) {
-      alert(language === 'en' ? 'Card not ready. Please wait a moment.' : 'La tarjeta no está lista. Por favor espera un momento.')
-      return
-    }
-
-    try {
-      // Show loading message
-      const loadingMsg = language === 'en' 
-        ? 'Generating animated GIF... This may take a moment.'
-        : 'Generando GIF animado... Esto puede tomar un momento.'
-      alert(loadingMsg)
-
-      const width = shareCardRef.current.offsetWidth
-      const height = shareCardRef.current.offsetHeight
-      const scale = 2
-      const scaledWidth = width * scale
-      const scaledHeight = height * scale
-
-      // Capture base card once (more efficient)
-      const baseCanvas = await html2canvas(shareCardRef.current, {
-        backgroundColor: '#1e1b4b',
-        scale: scale,
-        useCORS: true,
-        logging: false,
-        allowTaint: true,
-        width: width,
-        height: height
-      })
-
-      // Create GIF with worker
-      const gif = new GIF({
-        workers: 2,
-        quality: 10,
-        width: scaledWidth,
-        height: scaledHeight,
-        workerScript: '/gif.worker.js'
-      })
-
-      // Generate frames with animated confetti
-      const colors = ['#FFD700', '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8', '#F7DC6F']
-      const confettiPieces = []
-      
-      // Generate confetti pieces
-      for (let i = 0; i < 40; i++) {
-        confettiPieces.push({
-          x: Math.random() * width,
-          y: -Math.random() * height * 0.5,
-          color: colors[Math.floor(Math.random() * colors.length)],
-          size: Math.random() * 8 + 4,
-          speed: Math.random() * 2 + 1.5,
-          rotation: Math.random() * 360,
-          rotationSpeed: (Math.random() - 0.5) * 20
-        })
-      }
-
-      // Create 20 frames (about 1 second at 20fps for smaller file size)
-      const frameCount = 20
-      const tempCanvas = document.createElement('canvas')
-      tempCanvas.width = scaledWidth
-      tempCanvas.height = scaledHeight
-      const tempCtx = tempCanvas.getContext('2d')
-
-      for (let frame = 0; frame < frameCount; frame++) {
-        tempCtx.clearRect(0, 0, scaledWidth, scaledHeight)
-        // Draw base card
-        tempCtx.drawImage(baseCanvas, 0, 0)
-
-        // Draw animated confetti
-        confettiPieces.forEach(piece => {
-          const currentY = piece.y + (piece.speed * frame * (height / frameCount))
-          if (currentY < height && currentY > -piece.size) {
-            tempCtx.save()
-            tempCtx.translate(piece.x * scale, currentY * scale)
-            tempCtx.rotate((piece.rotation + frame * piece.rotationSpeed) * Math.PI / 180)
-            tempCtx.fillStyle = piece.color
-            tempCtx.shadowColor = piece.color
-            tempCtx.shadowBlur = 4
-            tempCtx.fillRect(-piece.size * scale / 2, -piece.size * scale / 2, piece.size * scale, piece.size * scale)
-            tempCtx.restore()
-          }
-        })
-
-        gif.addFrame(tempCanvas, { delay: 50 }) // 20fps
-      }
-
-      gif.on('finished', (blob) => {
-        const link = document.createElement('a')
-        link.download = `happy-new-year-${name.replace(/\s+/g, '-')}-${Date.now()}.gif`
-        link.href = URL.createObjectURL(blob)
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-        URL.revokeObjectURL(link.href)
-      })
-
-      gif.on('progress', (p) => {
-        // Optional: show progress
-        console.log(`GIF progress: ${(p * 100).toFixed(1)}%`)
-      })
-
-      gif.render()
-    } catch (error) {
-      console.error('Error generating GIF:', error)
-      alert(language === 'en' 
-        ? `Error generating GIF: ${error.message}. Please try again.` 
-        : `Error al generar el GIF: ${error.message}. Por favor intenta de nuevo.`)
-    }
-  }
 
   const shareToWhatsApp = async () => {
     // Use hash-based URL for HashRouter compatibility
@@ -434,7 +296,56 @@ function App() {
   const shareToFacebook = () => {
     // Use hash-based URL for HashRouter compatibility
     const url = `${window.location.origin}${window.location.pathname}#/?name=${encodeURIComponent(name)}&lang=${language}&message=${selectedMessage}`
-    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, '_blank', 'width=600,height=400')
+    try {
+      const shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`
+      const opened = window.open(shareUrl, '_blank')
+      if (!opened || opened.closed || typeof opened.closed === 'undefined') {
+        // Popup blocked, fallback to copying link
+        navigator.clipboard.writeText(url)
+        showToast(
+          language === 'en' 
+            ? 'Popup blocked. Link copied to clipboard!' 
+            : 'Popup bloqueado. ¡Enlace copiado al portapapeles!',
+          'warning'
+        )
+      }
+    } catch {
+      // Fallback to copying link
+      navigator.clipboard.writeText(url)
+      showToast(
+        language === 'en' 
+          ? 'Link copied to clipboard! Paste it on Facebook.' 
+          : '¡Enlace copiado al portapapeles! Pégalo en Facebook.',
+        'info'
+      )
+    }
+  }
+
+  const shareToInstagram = () => {
+    // Use hash-based URL for HashRouter compatibility
+    const url = `${window.location.origin}${window.location.pathname}#/?name=${encodeURIComponent(name)}&lang=${language}&message=${selectedMessage}`
+    // Instagram doesn't have a direct web sharing API
+    // Try to open Instagram web, but also copy link as fallback
+    try {
+      navigator.clipboard.writeText(url)
+      // Try to open Instagram web interface
+      window.open('https://www.instagram.com/', '_blank')
+      showToast(
+        language === 'en' 
+          ? 'Link copied! Instagram opened. Paste the link in your story or post.' 
+          : '¡Enlace copiado! Instagram abierto. Pega el enlace en tu historia o publicación.',
+        'info'
+      )
+    } catch {
+      // Just copy if opening fails
+      navigator.clipboard.writeText(url)
+      showToast(
+        language === 'en' 
+          ? 'Link copied! Paste it in your Instagram story or post.' 
+          : '¡Enlace copiado! Pégalo en tu historia o publicación de Instagram.',
+        'info'
+      )
+    }
   }
 
 
@@ -458,6 +369,7 @@ function App() {
 
   if (showResult) {
     return (
+      <>
       <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4 relative overflow-hidden">
         {/* Confetti Animation */}
         {confetti.map((piece) => (
@@ -470,7 +382,7 @@ function App() {
               height: `${piece.size}px`,
               backgroundColor: piece.color,
               animation: `fall ${piece.speed}s linear infinite`,
-              animationDelay: `${Math.random() * 2}s`,
+              animationDelay: `${piece.animationDelay}s`,
               boxShadow: `0 0 ${piece.size}px ${piece.color}`
             }}
           />
@@ -617,35 +529,6 @@ function App() {
                 {messages[language][selectedMessage]}
               </p>
               
-              {/* Download Options */}
-              <div className="mb-6">
-                <p className="text-white/80 text-sm mb-4 font-semibold">
-                  {language === 'en' ? 'Download for Sharing' : 'Descargar para Compartir'}
-                </p>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={downloadImage}
-                    className="flex flex-col items-center gap-2 p-4 bg-gradient-to-r from-blue-500 to-cyan-500 hover:opacity-90 text-white rounded-xl font-semibold hover:scale-105 transition-transform shadow-lg"
-                    title="Download Image"
-                  >
-                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    <span className="text-xs">{language === 'en' ? 'Image' : 'Imagen'}</span>
-                  </button>
-                  <button
-                    onClick={downloadGIF}
-                    className="flex flex-col items-center gap-2 p-4 bg-gradient-to-r from-purple-500 to-pink-500 hover:opacity-90 text-white rounded-xl font-semibold hover:scale-105 transition-transform shadow-lg"
-                    title="Download GIF"
-                  >
-                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
-                    <span className="text-xs">GIF</span>
-                  </button>
-                </div>
-              </div>
-
               {/* Social Sharing Buttons */}
               <div className="mb-6">
                 <p className="text-white/80 text-sm mb-4 font-semibold">
@@ -673,9 +556,9 @@ function App() {
                     <span className="text-xs">Facebook</span>
                   </button>
                   <button
-                    onClick={downloadImage}
+                    onClick={shareToInstagram}
                     className="flex flex-col items-center gap-2 p-4 bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 hover:opacity-90 text-white rounded-xl font-semibold hover:scale-105 transition-transform shadow-lg"
-                    title="Instagram (Download Image)"
+                    title="Instagram"
                   >
                     <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.22 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/>
@@ -798,6 +681,16 @@ function App() {
           .animate-bounce-x {
             animation: bounce-x 1.5s ease-in-out infinite;
           }
+          @keyframes slideInRight {
+            from {
+              transform: translateX(100%);
+              opacity: 0;
+            }
+            to {
+              transform: translateX(0);
+              opacity: 1;
+            }
+          }
           @media (min-width: 768px) {
             .carousel-card-1 {
               transform: scale(1) !important;
@@ -806,10 +699,37 @@ function App() {
           }
         `}</style>
       </div>
+      
+      {/* Toast Notification */}
+      {toast && (
+        <div
+          className={`fixed top-4 right-4 z-50 px-6 py-4 rounded-xl shadow-2xl backdrop-blur-lg border border-white/20 animate-slide-in-right ${
+            toast.type === 'success' ? 'bg-green-500/90 text-white' :
+            toast.type === 'error' ? 'bg-red-500/90 text-white' :
+            toast.type === 'warning' ? 'bg-yellow-500/90 text-white' :
+            'bg-blue-500/90 text-white'
+          }`}
+          style={{
+            animation: 'slideInRight 0.3s ease-out'
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-xl">
+              {toast.type === 'success' ? '✓' :
+               toast.type === 'error' ? '✕' :
+               toast.type === 'warning' ? '⚠' :
+               'ℹ'}
+            </span>
+            <span className="font-semibold">{toast.message}</span>
+          </div>
+        </div>
+      )}
+      </>
     )
   }
 
   return (
+    <>
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center p-4">
       <div className="w-full max-w-2xl bg-white/10 backdrop-blur-lg rounded-3xl p-8 md:p-12 shadow-2xl border border-white/20">
         <h1 className="text-4xl md:text-6xl font-bold text-center text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-pink-500 to-purple-500 mb-8 animate-pulse">
@@ -890,7 +810,33 @@ function App() {
           {language === 'en' ? 'Generate Wish' : 'Generar Deseo'}
         </button>
       </div>
+      
+      {/* Toast Notification */}
+      {toast && (
+        <div
+          className={`fixed top-4 right-4 z-50 px-6 py-4 rounded-xl shadow-2xl backdrop-blur-lg border border-white/20 ${
+            toast.type === 'success' ? 'bg-green-500/90 text-white' :
+            toast.type === 'error' ? 'bg-red-500/90 text-white' :
+            toast.type === 'warning' ? 'bg-yellow-500/90 text-white' :
+            'bg-blue-500/90 text-white'
+          }`}
+          style={{
+            animation: 'slideInRight 0.3s ease-out'
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-xl">
+              {toast.type === 'success' ? '✓' :
+               toast.type === 'error' ? '✕' :
+               toast.type === 'warning' ? '⚠' :
+               'ℹ'}
+            </span>
+            <span className="font-semibold">{toast.message}</span>
+          </div>
+        </div>
+      )}
     </div>
+    </>
   )
 }
 
