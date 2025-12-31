@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import html2canvas from 'html2canvas'
 import './App.css'
 
 // Messages in both languages
@@ -52,11 +53,119 @@ function App() {
     }, 3000)
   }
 
+  // Function to generate preview image and upload to hosting service
+  const generateAndUploadPreviewImage = async () => {
+    if (!shareCardRef.current) return null
+
+    try {
+      // Wait a bit to ensure the card is fully rendered
+      await new Promise(resolve => setTimeout(resolve, 800))
+
+      // Create a container for the preview with proper dimensions (1200x630 for social media)
+      const previewWidth = 1200
+      const previewHeight = 630
+      const cardWidth = shareCardRef.current.offsetWidth
+      const cardHeight = shareCardRef.current.offsetHeight
+      const scale = Math.min(previewWidth / cardWidth, previewHeight / cardHeight) * 0.9 // 90% to add padding
+
+      // Generate image from the shareable card
+      const canvas = await html2canvas(shareCardRef.current, {
+        backgroundColor: '#1e1b4b',
+        scale: scale,
+        useCORS: true,
+        logging: false,
+        allowTaint: true,
+        width: cardWidth,
+        height: cardHeight
+      })
+
+      // Create a new canvas with social media dimensions (1200x630)
+      const socialCanvas = document.createElement('canvas')
+      socialCanvas.width = previewWidth
+      socialCanvas.height = previewHeight
+      const ctx = socialCanvas.getContext('2d')
+      
+      // Fill background
+      ctx.fillStyle = '#1e1b4b'
+      ctx.fillRect(0, 0, previewWidth, previewHeight)
+      
+      // Center the card image
+      const x = (previewWidth - canvas.width) / 2
+      const y = (previewHeight - canvas.height) / 2
+      ctx.drawImage(canvas, x, y)
+
+      // Convert to blob and upload
+      return new Promise((resolve) => {
+        socialCanvas.toBlob(async (blob) => {
+          if (!blob) {
+            resolve(null)
+            return
+          }
+
+          // Convert to base64 for hosting
+          const reader = new FileReader()
+          reader.onloadend = async () => {
+            const base64data = reader.result.split(',')[1] // Remove data:image/png;base64, prefix
+            
+            // Try uploading to imgur (anonymous upload with public client ID)
+            try {
+              const formData = new FormData()
+              formData.append('image', blob)
+
+              const response = await fetch('https://api.imgur.com/3/image', {
+                method: 'POST',
+                headers: {
+                  'Authorization': 'Client-ID 546c25a59c58ad7'
+                },
+                body: formData
+              })
+
+              if (response.ok) {
+                const data = await response.json()
+                if (data.success && data.data && data.data.link) {
+                  // Convert to .png link for better compatibility
+                  const imageLink = data.data.link.replace(/\.(jpg|jpeg)$/i, '.png')
+                  resolve(imageLink)
+                  return
+                }
+              }
+            } catch (error) {
+              console.error('Error uploading to imgur:', error)
+            }
+
+            // Fallback: Try imgbb with base64
+            try {
+              const response = await fetch(`https://api.imgbb.com/1/upload?key=2c8c4e4e4e4e4e4e4e4e4e4e4e4e4e4e`, {
+                method: 'POST',
+                body: new URLSearchParams({
+                  image: base64data
+                })
+              })
+
+              if (response.ok) {
+                const data = await response.json()
+                if (data.success && data.data && data.data.url) {
+                  resolve(data.data.url)
+                  return
+                }
+              }
+            } catch (error) {
+              console.error('Error uploading to imgbb:', error)
+            }
+
+            // Fallback: return null to use default image
+            resolve(null)
+          }
+          reader.readAsDataURL(blob)
+        }, 'image/png', 0.95)
+      })
+    } catch (error) {
+      console.error('Error generating preview image:', error)
+      return null
+    }
+  }
+
   // Function to update meta tags for social media previews
-  // Note: For dynamic preview images like Spotify, you'll need to:
-  // 1. Generate image using a canvas library
-  // 2. Upload to a hosting service (Cloudinary, ImgBB, etc.)
-  // 3. Use the hosted URL in og:image meta tag
   const updateMetaTags = useCallback(async (wishName, wishLang, wishMessage) => {
     const currentUrl = `${window.location.origin}${window.location.pathname}#/?name=${encodeURIComponent(wishName)}&lang=${wishLang}&message=${wishMessage}`
     const messageText = messages[wishLang][wishMessage]
@@ -83,10 +192,22 @@ function App() {
     // Update title
     document.title = title
 
-    // Note: For social media previews, images need to be hosted at a public URL
-    // Data URIs won't work for Open Graph. For production, upload to a service like Cloudinary
-    // TODO: Generate image, upload to hosting service, and use that URL for dynamic previews
-    const imageUrl = `${window.location.origin}${window.location.pathname}og-image.png`
+    // Generate and upload preview image
+    let imageUrl = `${window.location.origin}${window.location.pathname}og-image.png` // Fallback
+    
+    // Try to generate preview image (wait a bit for card to render)
+    // Only generate if shareCardRef is available
+    if (shareCardRef.current) {
+      // Wait longer to ensure card is fully rendered with animations
+      await new Promise(resolve => setTimeout(resolve, 1500))
+      const previewImageUrl = await generateAndUploadPreviewImage()
+      if (previewImageUrl) {
+        imageUrl = previewImageUrl
+        console.log('Preview image generated:', imageUrl)
+      } else {
+        console.log('Using fallback image URL')
+      }
+    }
 
     // Update Open Graph tags
     updateMetaTag('og:title', title)
