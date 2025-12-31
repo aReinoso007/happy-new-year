@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import html2canvas from 'html2canvas'
 import GIF from 'gif.js'
@@ -43,29 +43,106 @@ function App() {
   const [showSwipePrompt, setShowSwipePrompt] = useState(true)
   const shareCardRef = useRef(null)
   const carouselRef = useRef(null)
+  const isResettingRef = useRef(false)
+
+  // Function to update meta tags for social media previews
+  // Note: For dynamic preview images like Spotify, you'll need to:
+  // 1. Generate image using html2canvas
+  // 2. Upload to a hosting service (Cloudinary, ImgBB, etc.)
+  // 3. Use the hosted URL in og:image meta tag
+  const updateMetaTags = useCallback(async (wishName, wishLang, wishMessage) => {
+    const currentUrl = `${window.location.origin}${window.location.pathname}#/?name=${encodeURIComponent(wishName)}&lang=${wishLang}&message=${wishMessage}`
+    const messageText = messages[wishLang][wishMessage]
+    const title = wishLang === 'en' 
+      ? `Happy New Year ${wishName}! 🎉` 
+      : `¡Feliz Año Nuevo ${wishName}! 🎉`
+    const description = messageText.length > 150 ? messageText.substring(0, 150) + '...' : messageText
+
+    // Update or create meta tags
+    const updateMetaTag = (property, content) => {
+      let meta = document.querySelector(`meta[property="${property}"]`) || document.querySelector(`meta[name="${property}"]`)
+      if (!meta) {
+        meta = document.createElement('meta')
+        if (property.startsWith('og:') || property.startsWith('twitter:')) {
+          meta.setAttribute('property', property)
+        } else {
+          meta.setAttribute('name', property)
+        }
+        document.head.appendChild(meta)
+      }
+      meta.setAttribute('content', content)
+    }
+
+    // Update title
+    document.title = title
+
+    // Note: For social media previews, images need to be hosted at a public URL
+    // Data URIs won't work for Open Graph. For production, upload to a service like Cloudinary
+    // TODO: Generate image, upload to hosting service, and use that URL for dynamic previews
+    const imageUrl = `${window.location.origin}${window.location.pathname}og-image.png`
+
+    // Update Open Graph tags
+    updateMetaTag('og:title', title)
+    updateMetaTag('og:description', description)
+    updateMetaTag('og:url', currentUrl)
+    updateMetaTag('og:image', imageUrl)
+    updateMetaTag('og:image:width', '1200')
+    updateMetaTag('og:image:height', '630')
+    updateMetaTag('og:image:type', 'image/png')
+
+    // Update Twitter Card tags
+    updateMetaTag('twitter:card', 'summary_large_image')
+    updateMetaTag('twitter:title', title)
+    updateMetaTag('twitter:description', description)
+    updateMetaTag('twitter:image', imageUrl)
+
+    // Update standard meta tags
+    updateMetaTag('title', title)
+    updateMetaTag('description', description)
+  }, [])
 
   // Check if there's a name in the URL (check both window.location.search and searchParams)
   useEffect(() => {
+    // Skip if we're in the middle of resetting
+    if (isResettingRef.current) {
+      isResettingRef.current = false
+      return
+    }
+    
     // First, try to read from window.location.search (works with regular query params)
     const urlParams = new URLSearchParams(window.location.search)
     let urlName = urlParams.get('name')
-    let urlLang = urlParams.get('lang') || 'en'
+    let urlLang = urlParams.get('lang')
     let urlMessage = urlParams.get('message')
     
-    // Also check hash-based params (for HashRouter)
+    // Also check hash-based params (for HashRouter) - these take priority
     const hash = window.location.hash
     if (hash && hash.includes('?')) {
       const hashParams = new URLSearchParams(hash.split('?')[1])
-      if (!urlName) urlName = hashParams.get('name')
-      if (!urlLang) urlLang = hashParams.get('lang') || 'en'
-      if (!urlMessage) urlMessage = hashParams.get('message')
+      const hashName = hashParams.get('name')
+      const hashLang = hashParams.get('lang')
+      const hashMessage = hashParams.get('message')
+      
+      // Use hash params if they exist (hash takes priority)
+      if (hashName) urlName = hashName
+      if (hashLang) urlLang = hashLang
+      if (hashMessage) urlMessage = hashMessage
     }
     
     // If still not found, try searchParams (from React Router)
     if (!urlName) {
       urlName = searchParams.get('name')
-      urlLang = searchParams.get('lang') || 'en'
+    }
+    if (!urlLang) {
+      urlLang = searchParams.get('lang')
+    }
+    if (!urlMessage) {
       urlMessage = searchParams.get('message')
+    }
+    
+    // Ensure urlLang is valid (default to 'en' only if not set at all)
+    if (!urlLang || (urlLang !== 'en' && urlLang !== 'es')) {
+      urlLang = 'en'
     }
     
     if (urlName) {
@@ -75,13 +152,17 @@ function App() {
         setSelectedMessage(parseInt(urlMessage))
       }
       setShowResult(true)
+      // Update meta tags for social media preview
+      if (urlMessage) {
+        updateMetaTags(urlName, urlLang, parseInt(urlMessage))
+      }
       // Also update searchParams to keep them in sync (only if different)
       const currentName = searchParams.get('name')
       if (currentName !== urlName) {
         setSearchParams({ name: urlName, lang: urlLang, message: urlMessage })
       }
     }
-  }, [searchParams, setSearchParams]) // Include dependencies but check to avoid loops
+  }, [searchParams, setSearchParams, updateMetaTags]) // Include dependencies but check to avoid loops
 
   // Generate confetti animation
   useEffect(() => {
@@ -181,6 +262,8 @@ function App() {
     if (name.trim() && selectedMessage !== null) {
       setSearchParams({ name: name.trim(), lang: language, message: selectedMessage })
       setShowResult(true)
+      // Update meta tags for social media preview
+      updateMetaTags(name.trim(), language, selectedMessage)
     }
   }
 
@@ -356,10 +439,21 @@ function App() {
 
 
   const handleReset = () => {
+    // Set flag to prevent useEffect from re-triggering
+    isResettingRef.current = true
+    
+    // Clear URL parameters first
+    const basePath = window.location.pathname
+    const baseHash = window.location.hash.split('?')[0] || '#/'
+    window.history.replaceState({}, '', basePath + baseHash)
+    
+    // Clear all state
     setSearchParams({})
     setShowResult(false)
     setSelectedMessage(null)
     setName('')
+    setShowSwipePrompt(true)
+    setLanguage('en') // Reset to default language
   }
 
   if (showResult) {
