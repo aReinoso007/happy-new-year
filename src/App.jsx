@@ -44,11 +44,29 @@ function App() {
   const shareCardRef = useRef(null)
   const carouselRef = useRef(null)
 
-  // Check if there's a name in the URL
+  // Check if there's a name in the URL (check both window.location.search and searchParams)
   useEffect(() => {
-    const urlName = searchParams.get('name')
-    const urlLang = searchParams.get('lang') || 'en'
-    const urlMessage = searchParams.get('message')
+    // First, try to read from window.location.search (works with regular query params)
+    const urlParams = new URLSearchParams(window.location.search)
+    let urlName = urlParams.get('name')
+    let urlLang = urlParams.get('lang') || 'en'
+    let urlMessage = urlParams.get('message')
+    
+    // Also check hash-based params (for HashRouter)
+    const hash = window.location.hash
+    if (hash && hash.includes('?')) {
+      const hashParams = new URLSearchParams(hash.split('?')[1])
+      if (!urlName) urlName = hashParams.get('name')
+      if (!urlLang) urlLang = hashParams.get('lang') || 'en'
+      if (!urlMessage) urlMessage = hashParams.get('message')
+    }
+    
+    // If still not found, try searchParams (from React Router)
+    if (!urlName) {
+      urlName = searchParams.get('name')
+      urlLang = searchParams.get('lang') || 'en'
+      urlMessage = searchParams.get('message')
+    }
     
     if (urlName) {
       setName(urlName)
@@ -57,8 +75,13 @@ function App() {
         setSelectedMessage(parseInt(urlMessage))
       }
       setShowResult(true)
+      // Also update searchParams to keep them in sync (only if different)
+      const currentName = searchParams.get('name')
+      if (currentName !== urlName) {
+        setSearchParams({ name: urlName, lang: urlLang, message: urlMessage })
+      }
     }
-  }, [searchParams])
+  }, [searchParams, setSearchParams]) // Include dependencies but check to avoid loops
 
   // Generate confetti animation
   useEffect(() => {
@@ -162,7 +185,8 @@ function App() {
   }
 
   const handleShare = () => {
-    const url = `${window.location.origin}${window.location.pathname}?name=${encodeURIComponent(name)}&lang=${language}&message=${selectedMessage}`
+    // Use hash-based URL for HashRouter compatibility
+    const url = `${window.location.origin}${window.location.pathname}#/?name=${encodeURIComponent(name)}&lang=${language}&message=${selectedMessage}`
     navigator.clipboard.writeText(url)
     alert(language === 'en' ? 'Link copied to clipboard!' : '¡Enlace copiado al portapapeles!')
   }
@@ -315,7 +339,8 @@ function App() {
   }
 
   const shareToWhatsApp = async () => {
-    const url = `${window.location.origin}${window.location.pathname}?name=${encodeURIComponent(name)}&lang=${language}&message=${selectedMessage}`
+    // Use hash-based URL for HashRouter compatibility
+    const url = `${window.location.origin}${window.location.pathname}#/?name=${encodeURIComponent(name)}&lang=${language}&message=${selectedMessage}`
     const text = language === 'en' 
       ? `Happy New Year ${name}! 🎉\n\n${messages[language][selectedMessage]}\n\n${url}`
       : `¡Feliz Año Nuevo ${name}! 🎉\n\n${messages[language][selectedMessage]}\n\n${url}`
@@ -324,7 +349,8 @@ function App() {
   }
 
   const shareToFacebook = () => {
-    const url = `${window.location.origin}${window.location.pathname}?name=${encodeURIComponent(name)}&lang=${language}&message=${selectedMessage}`
+    // Use hash-based URL for HashRouter compatibility
+    const url = `${window.location.origin}${window.location.pathname}#/?name=${encodeURIComponent(name)}&lang=${language}&message=${selectedMessage}`
     window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, '_blank', 'width=600,height=400')
   }
 
