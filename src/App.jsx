@@ -425,7 +425,7 @@ function App() {
         <div className="w-full max-w-6xl mx-auto z-10 relative">
           <div 
             ref={carouselRef}
-            className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide scroll-smooth gap-6 px-4"
+            className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide scroll-smooth gap-6 px-4 md:overflow-hidden md:justify-center"
             style={{
               scrollbarWidth: 'none',
               msOverflowStyle: 'none',
@@ -444,7 +444,7 @@ function App() {
             {/* Card 1: Shareable Card (Background) */}
             <div 
               ref={shareCardRef}
-              className="flex-shrink-0 w-full max-w-sm mx-auto aspect-[9/16] rounded-3xl p-8 flex flex-col items-center justify-center text-center relative overflow-hidden shadow-2xl snap-center"
+              className="flex-shrink-0 w-full max-w-sm mx-auto aspect-[9/16] rounded-3xl p-8 flex flex-col items-center justify-center text-center relative overflow-hidden shadow-2xl snap-center carousel-card-1"
               style={{ 
                 minHeight: '640px',
                 background: 'linear-gradient(to bottom right, #581c87, #1e3a8a, #312e81)',
@@ -511,8 +511,8 @@ function App() {
               </div>
             </div>
 
-            {/* Card 2: Share Options Card (Foreground) */}
-            <div className="flex-shrink-0 w-full max-w-md mx-auto text-center z-10 bg-white/10 backdrop-blur-lg rounded-3xl p-8 md:p-12 shadow-2xl border border-white/20 snap-center">
+            {/* Card 2: Share Options Card (Foreground) - Hidden on desktop, accessible via scroll */}
+            <div className="flex-shrink-0 w-full max-w-md mx-auto text-center z-10 bg-white/10 backdrop-blur-lg rounded-3xl p-8 md:p-12 shadow-2xl border border-white/20 snap-center md:hidden">
               <h1 className="text-5xl md:text-7xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-pink-500 to-purple-500 mb-6 animate-pulse">
                 {language === 'en' ? 'Happy New Year' : '¡Feliz Año Nuevo'}
               </h1>
@@ -608,9 +608,9 @@ function App() {
             </div>
           </div>
 
-          {/* Swipe Prompt Animation */}
+          {/* Swipe Prompt Animation - Only show on mobile */}
           {showSwipePrompt && (
-            <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-20 pointer-events-none">
+            <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 z-20 pointer-events-none md:hidden">
               <div className="flex flex-col items-center gap-2 animate-swipe-prompt">
                 <p className="text-white/80 text-sm font-semibold">
                   {language === 'en' ? 'Swipe to share' : 'Desliza para compartir'}
@@ -703,6 +703,12 @@ function App() {
           }
           .animate-bounce-x {
             animation: bounce-x 1.5s ease-in-out infinite;
+          }
+          @media (min-width: 768px) {
+            .carousel-card-1 {
+              transform: scale(1) !important;
+              opacity: 1 !important;
+            }
           }
         `}</style>
       </div>
